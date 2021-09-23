@@ -12,7 +12,6 @@ where
 {
     program: P,
     cache: Option<Cache>,
-    primitive: <P::Renderer as Renderer>::Output,
     queued_events: Vec<Event>,
     queued_messages: Vec<P::Message>,
 }

@@ -1,6 +1,7 @@
 use crate::event::{self, Event};
 use crate::layout;
 use crate::overlay;
+use crate::renderer::{self, Renderer};
 use crate::{
     Clipboard, Color, Hasher, Layout, Length, Point, Rectangle, Widget,
 };
@@ -15,18 +16,13 @@ use crate::{
 ///
 /// [built-in widget]: widget/index.html#built-in-widgets
 #[allow(missing_debug_implementations)]
-pub struct Element<'a, Message, Renderer> {
-    pub(crate) widget: Box<dyn Widget<Message, Renderer> + 'a>,
+pub struct Element<'a, Message> {
+    pub(crate) widget: Box<dyn Widget<Message> + 'a>,
 }
 
-impl<'a, Message, Renderer> Element<'a, Message, Renderer>
-where
-    Renderer: crate::Renderer,
-{
+impl<'a, Message, Renderer> Element<'a, Message> {
     /// Creates a new [`Element`] containing the given [`Widget`].
-    pub fn new(
-        widget: impl Widget<Message, Renderer> + 'a,
-    ) -> Element<'a, Message, Renderer> {
+    pub fn new(widget: impl Widget<Message> + 'a) -> Element<'a, Message> {
         Element {
             widget: Box::new(widget),
         }
@@ -165,7 +161,7 @@ where
     ///     }
     /// }
     /// ```
-    pub fn map<F, B>(self, f: F) -> Element<'a, B, Renderer>
+    pub fn map<F, B>(self, f: F) -> Element<'a, B>
     where
         Message: 'static,
         Renderer: 'a,
@@ -183,10 +179,7 @@ where
     /// This can be very useful for debugging your layout!
     ///
     /// [`Renderer`]: crate::Renderer
-    pub fn explain<C: Into<Color>>(
-        self,
-        color: C,
-    ) -> Element<'a, Message, Renderer>
+    pub fn explain<C: Into<Color>>(self, color: C) -> Element<'a, Message>
     where
         Message: 'static,
         Renderer: 'a + layout::Debugger,
@@ -241,13 +234,13 @@ where
     pub fn draw(
         &self,
         renderer: &mut Renderer,
-        defaults: &Renderer::Defaults,
+        defaults: &renderer::Defaults,
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
-    ) -> Renderer::Output {
+    ) {
         self.widget
-            .draw(renderer, defaults, layout, cursor_position, viewport)
+            .draw(renderer, defaults, layout, cursor_position, viewport);
     }
 
     /// Computes the _layout_ hash of the [`Element`].
@@ -259,21 +252,18 @@ where
     pub fn overlay<'b>(
         &'b mut self,
         layout: Layout<'_>,
-    ) -> Option<overlay::Element<'b, Message, Renderer>> {
+    ) -> Option<overlay::Element<'b, Message>> {
         self.widget.overlay(layout)
     }
 }
 
-struct Map<'a, A, B, Renderer> {
-    widget: Box<dyn Widget<A, Renderer> + 'a>,
+struct Map<'a, A, B> {
+    widget: Box<dyn Widget<A> + 'a>,
     mapper: Box<dyn Fn(A) -> B>,
 }
 
-impl<'a, A, B, Renderer> Map<'a, A, B, Renderer> {
-    pub fn new<F>(
-        widget: Box<dyn Widget<A, Renderer> + 'a>,
-        mapper: F,
-    ) -> Map<'a, A, B, Renderer>
+impl<'a, A, B> Map<'a, A, B> {
+    pub fn new<F>(widget: Box<dyn Widget<A> + 'a>, mapper: F) -> Map<'a, A, B>
     where
         F: 'static + Fn(A) -> B,
     {
@@ -284,9 +274,8 @@ impl<'a, A, B, Renderer> Map<'a, A, B, Renderer> {
     }
 }
 
-impl<'a, A, B, Renderer> Widget<B, Renderer> for Map<'a, A, B, Renderer>
+impl<'a, A, B> Widget<B> for Map<'a, A, B>
 where
-    Renderer: crate::Renderer + 'a,
     A: 'static,
     B: 'static,
 {
@@ -300,7 +289,7 @@ where
 
     fn layout(
         &self,
-        renderer: &Renderer,
+        renderer: &dyn Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         self.widget.layout(renderer, limits)
@@ -311,7 +300,7 @@ where
         event: Event,
         layout: Layout<'_>,
         cursor_position: Point,
-        renderer: &Renderer,
+        renderer: &dyn Renderer,
         clipboard: &mut dyn Clipboard,
         messages: &mut Vec<B>,
     ) -> event::Status {
@@ -335,14 +324,14 @@ where
 
     fn draw(
         &self,
-        renderer: &mut Renderer,
-        defaults: &Renderer::Defaults,
+        renderer: &mut dyn Renderer,
+        defaults: &renderer::Defaults,
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
-    ) -> Renderer::Output {
+    ) {
         self.widget
-            .draw(renderer, defaults, layout, cursor_position, viewport)
+            .draw(renderer, defaults, layout, cursor_position, viewport);
     }
 
     fn hash_layout(&self, state: &mut Hasher) {
@@ -352,7 +341,7 @@ where
     fn overlay(
         &mut self,
         layout: Layout<'_>,
-    ) -> Option<overlay::Element<'_, B, Renderer>> {
+    ) -> Option<overlay::Element<'_, B>> {
         let mapper = &self.mapper;
 
         self.widget
@@ -361,25 +350,18 @@ where
     }
 }
 
-struct Explain<'a, Message, Renderer: crate::Renderer> {
-    element: Element<'a, Message, Renderer>,
+struct Explain<'a, Message> {
+    element: Element<'a, Message>,
     color: Color,
 }
 
-impl<'a, Message, Renderer> Explain<'a, Message, Renderer>
-where
-    Renderer: crate::Renderer,
-{
-    fn new(element: Element<'a, Message, Renderer>, color: Color) -> Self {
+impl<'a, Message> Explain<'a, Message> {
+    fn new(element: Element<'a, Message>, color: Color) -> Self {
         Explain { element, color }
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer>
-    for Explain<'a, Message, Renderer>
-where
-    Renderer: crate::Renderer + layout::Debugger,
-{
+impl<'a, Message> Widget<Message> for Explain<'a, Message> {
     fn width(&self) -> Length {
         self.element.widget.width()
     }
@@ -390,7 +372,7 @@ where
 
     fn layout(
         &self,
-        renderer: &Renderer,
+        renderer: &dyn Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         self.element.widget.layout(renderer, limits)
@@ -401,7 +383,7 @@ where
         event: Event,
         layout: Layout<'_>,
         cursor_position: Point,
-        renderer: &Renderer,
+        renderer: &dyn Renderer,
         clipboard: &mut dyn Clipboard,
         messages: &mut Vec<Message>,
     ) -> event::Status {
@@ -417,12 +399,12 @@ where
 
     fn draw(
         &self,
-        renderer: &mut Renderer,
-        defaults: &Renderer::Defaults,
+        renderer: &mut dyn Renderer,
+        defaults: &renderer::Defaults,
         layout: Layout<'_>,
         cursor_position: Point,
         viewport: &Rectangle,
-    ) -> Renderer::Output {
+    ) {
         renderer.explain(
             defaults,
             self.element.widget.as_ref(),
@@ -430,7 +412,7 @@ where
             cursor_position,
             viewport,
             self.color,
-        )
+        );
     }
 
     fn hash_layout(&self, state: &mut Hasher) {
@@ -440,7 +422,7 @@ where
     fn overlay(
         &mut self,
         layout: Layout<'_>,
-    ) -> Option<overlay::Element<'_, Message, Renderer>> {
+    ) -> Option<overlay::Element<'_, Message>> {
         self.element.overlay(layout)
     }
 }

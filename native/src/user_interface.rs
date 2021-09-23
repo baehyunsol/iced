@@ -1,7 +1,7 @@
 use crate::event::{self, Event};
 use crate::layout;
 use crate::overlay;
-use crate::{Clipboard, Element, Layout, Point, Rectangle, Size};
+use crate::{Clipboard, Element, Layout, Point, Rectangle, Renderer, Size};
 
 use std::hash::Hasher;
 
@@ -18,17 +18,14 @@ use std::hash::Hasher;
 ///
 /// [`integration` example]: https://github.com/hecrj/iced/tree/0.3/examples/integration
 #[allow(missing_debug_implementations)]
-pub struct UserInterface<'a, Message, Renderer> {
-    root: Element<'a, Message, Renderer>,
+pub struct UserInterface<'a, Message> {
+    root: Element<'a, Message>,
     base: Layer,
     overlay: Option<Layer>,
     bounds: Size,
 }
 
-impl<'a, Message, Renderer> UserInterface<'a, Message, Renderer>
-where
-    Renderer: crate::Renderer,
-{
+impl<'a, Message> UserInterface<'a, Message> {
     /// Builds a user interface for an [`Element`].
     ///
     /// It is able to avoid expensive computations when using a [`Cache`]
@@ -82,11 +79,11 @@ where
     ///     cache = user_interface.into_cache();
     /// }
     /// ```
-    pub fn build<E: Into<Element<'a, Message, Renderer>>>(
+    pub fn build<E: Into<Element<'a, Message>>>(
         root: E,
         bounds: Size,
         cache: Cache,
-        renderer: &mut Renderer,
+        renderer: &mut dyn Renderer,
     ) -> Self {
         let root = root.into();
 
@@ -194,7 +191,7 @@ where
         &mut self,
         events: &[Event],
         cursor_position: Point,
-        renderer: &Renderer,
+        renderer: &dyn Renderer,
         clipboard: &mut dyn Clipboard,
         messages: &mut Vec<Message>,
     ) -> Vec<event::Status> {
@@ -331,9 +328,9 @@ where
     /// ```
     pub fn draw(
         &mut self,
-        renderer: &mut Renderer,
+        renderer: &mut dyn Renderer,
         cursor_position: Point,
-    ) -> Renderer::Output {
+    ) {
         let viewport = Rectangle::with_size(self.bounds);
 
         let overlay = if let Some(mut overlay) =
@@ -395,7 +392,7 @@ where
 
     /// Relayouts and returns a new  [`UserInterface`] using the provided
     /// bounds.
-    pub fn relayout(self, bounds: Size, renderer: &mut Renderer) -> Self {
+    pub fn relayout(self, bounds: Size, renderer: &mut dyn Renderer) -> Self {
         Self::build(
             self.root,
             bounds,
@@ -421,8 +418,8 @@ where
     fn overlay_layer(
         cache: Option<Layer>,
         bounds: Size,
-        overlay: &mut overlay::Element<'_, Message, Renderer>,
-        renderer: &Renderer,
+        overlay: &mut overlay::Element<'_, Message>,
+        renderer: &dyn Renderer,
     ) -> Layer {
         let new_hash = {
             let hasher = &mut crate::Hasher::default();
